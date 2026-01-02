@@ -1,11 +1,73 @@
 import React, { useState } from 'react';
 import { analyzeSyntax } from '../services/api';
 
+// Parse constituency tree string into tree structure
+function parseTree(treeString) {
+    const tokens = treeString.replace(/\(/g, ' ( ').replace(/\)/g, ' ) ').split(/\s+/).filter(t => t);
+    let index = 0;
+
+    function parse() {
+        if (tokens[index] !== '(') return null;
+        index++; // skip '('
+        
+        const label = tokens[index++];
+        const children = [];
+        
+        while (tokens[index] !== ')') {
+            if (tokens[index] === '(') {
+                children.push(parse());
+            } else {
+                children.push({ label: tokens[index++], children: [] });
+            }
+        }
+        index++; // skip ')'
+        
+        return { label, children };
+    }
+
+    return parse();
+}
+
+// Tree visualization component
+function TreeNode({ node, depth = 0 }) {
+    if (!node) return null;
+    
+    const isLeaf = node.children.length === 0;
+    const hasChildren = node.children.length > 0;
+    
+    return (
+        <div className="flex flex-col items-center">
+            <div className={`px-3 py-1 rounded ${isLeaf ? 'bg-green-100 text-green-800' : 'bg-blue-100 text-blue-800'} font-semibold text-sm mb-2`}>
+                {node.label}
+            </div>
+            
+            {hasChildren && (
+                <>
+                    <div className="w-0.5 h-6 bg-slate-300"></div>
+                    <div className="flex gap-4 relative">
+                        {node.children.length > 1 && (
+                            <div className="absolute top-0 left-0 right-0 h-0.5 bg-slate-300" style={{ width: '100%' }}></div>
+                        )}
+                        {node.children.map((child, i) => (
+                            <div key={i} className="flex flex-col items-center">
+                                <div className="w-0.5 h-6 bg-slate-300"></div>
+                                <TreeNode node={child} depth={depth + 1} />
+                            </div>
+                        ))}
+                    </div>
+                </>
+            )}
+        </div>
+    );
+}
+
 export default function SyntaxAnalyzer() {
     const [text, setText] = useState('');
     const [file, setFile] = useState(null);
     const [result, setResult] = useState('');
+    const [treeData, setTreeData] = useState(null);
     const [loading, setLoading] = useState(false);
+    const [viewMode, setViewMode] = useState('tree'); // 'tree' or 'text'
 
     const handleFileUpload = (e) => {
         const uploadedFile = e.target.files[0];
@@ -31,6 +93,14 @@ export default function SyntaxAnalyzer() {
         try {
             const data = await analyzeSyntax(text);
             setResult(data.constituency_tree);
+            
+            // Parse the tree for visualization
+            try {
+                const parsed = parseTree(data.constituency_tree);
+                setTreeData(parsed);
+            } catch (parseError) {
+                console.error('Error parsing tree:', parseError);
+            }
         } catch (error) {
             console.error('Error analyzing syntax:', error);
             alert('Error analyzing text. Please try again.');
@@ -81,10 +151,33 @@ export default function SyntaxAnalyzer() {
 
             {result && (
                 <div className="mt-8">
-                    <h3 className="text-sm font-semibold uppercase text-slate-400 mb-2">Constituency Tree</h3>
-                    <pre className="bg-slate-900 text-green-400 p-6 rounded-xl overflow-auto font-mono text-sm leading-relaxed border-l-4 border-blue-500 shadow-inner">
-                        {result}
-                    </pre>
+                    <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-sm font-semibold uppercase text-slate-400">Constituency Tree</h3>
+                        <div className="flex gap-2">
+                            <button
+                                onClick={() => setViewMode('tree')}
+                                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${viewMode === 'tree' ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+                            >
+                                Tree View
+                            </button>
+                            <button
+                                onClick={() => setViewMode('text')}
+                                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${viewMode === 'text' ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+                            >
+                                Text View
+                            </button>
+                        </div>
+                    </div>
+                    
+                    {viewMode === 'tree' && treeData ? (
+                        <div className="bg-white border-2 border-slate-200 p-8 rounded-xl overflow-auto">
+                            <TreeNode node={treeData} />
+                        </div>
+                    ) : (
+                        <pre className="bg-slate-900 text-green-400 p-6 rounded-xl overflow-auto font-mono text-sm leading-relaxed border-l-4 border-blue-500 shadow-inner">
+                            {result}
+                        </pre>
+                    )}
                 </div>
             )}
         </div>
