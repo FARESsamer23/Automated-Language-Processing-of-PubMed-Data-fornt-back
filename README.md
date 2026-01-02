@@ -355,4 +355,4 @@ Full-Stack & AI-Oriented Developer
 
 ---
 
-This README can be used **directly on GitHub** as project documentation.
+
